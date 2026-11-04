@@ -20,6 +20,64 @@ const MAX_LIMIT = 100;
 //   - data memuat kantinId yang ter-populate (objek Kantin)
 exports.getAll = async (req, res) => {
   // TODO B1
+  const {
+    kantinId,
+    sort = "createdAt",
+    fields,
+  } = req.query;
+
+  const page = Math.max(
+    1,
+    parseInt(req.query.page, 10) || 1
+  );
+
+  const limit = Math.min(
+    MAX_LIMIT,
+    Math.max(1, parseInt(req.query.limit, 10) || 10)
+  );
+
+  const filter = {};
+
+  if (kantinId) {
+    filter.kantinId = kantinId;
+  }
+
+  let query = Menu.find(filter)
+    .sort({ [sort]: 1 })
+    .skip((page - 1) * limit)
+    .limit(limit);
+
+  if (fields) {
+    const selectedFields = fields
+      .split(",")
+      .map((field) => field.trim())
+      .filter(Boolean);
+
+    if (selectedFields.length > 0) {
+      query = query.select(selectedFields.join(" "));
+    }
+
+    if (
+      selectedFields.length === 0 ||
+      selectedFields.includes("kantinId")
+    ) {
+      query = query.populate("kantinId");
+    }
+  } else {
+    query = query.populate("kantinId");
+  }
+
+  const [data, total] = await Promise.all([
+    query,
+    Menu.countDocuments(filter),
+  ]);
+
+  res.status(200).json({
+    data,
+    page,
+    limit,
+    total,
+  });
 };
 
 // GET /menu/:id
@@ -28,6 +86,17 @@ exports.getAll = async (req, res) => {
 //   - format id salah -> 400 (ditangani errorHandler lewat CastError)
 exports.getById = async (req, res) => {
   // TODO B2
+  const menu = await Menu.findById(req.params.id)
+    .populate("kantinId");
+
+  if (!menu) {
+    throw {
+      status: 404,
+      message: "Menu tidak ditemukan",
+    };
+  }
+
+  res.status(200).json(menu);
 };
 
 // POST /menu
@@ -35,6 +104,9 @@ exports.getById = async (req, res) => {
 //   - validasi gagal / ISBN duplikat -> 400 (ditangani errorHandler)
 exports.create = async (req, res) => {
   // TODO B3
+  const menu = await Menu.create(req.body);
+
+  res.status(201).json(menu);
 };
 
 // PUT /menu/:id
@@ -43,6 +115,23 @@ exports.create = async (req, res) => {
 //   - tidak ada -> 404 { message }
 exports.update = async (req, res) => {
   // TODO B4
+  const menu = await Menu.findByIdAndUpdate(
+    req.params.id,
+    req.body,
+    {
+      new: true,
+      runValidators: true,
+    }
+  );
+
+  if (!menu) {
+    throw {
+      status: 404,
+      message: "Menu tidak ditemukan",
+    };
+  }
+
+  res.status(200).json(menu);
 };
 
 // DELETE /menu/:id
@@ -50,4 +139,16 @@ exports.update = async (req, res) => {
 //   - tidak ada -> 404 { message }
 exports.remove = async (req, res) => {
   // TODO B5
+  const menu = await Menu.findByIdAndDelete(
+    req.params.id
+  );
+
+  if (!menu) {
+    throw {
+      status: 404,
+      message: "Menu tidak ditemukan",
+    };
+  }
+
+  res.status(204).send();
 };
